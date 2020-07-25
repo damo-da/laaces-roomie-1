@@ -1,0 +1,118 @@
+' {$STAMP BS2p}
+' {$PBASIC 2.5}
+' This program reads all records from EEPROM
+
+SDA PIN 8
+SCL PIN 9
+
+DATA_SIZE   CON 16
+
+WbData VAR  Byte(DATA_SIZE)
+AddrIndex VAR Word
+
+
+addr VAR Word
+addr2 VAR Word
+value VAR Byte
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+MIN_TEMP_RNG       CON 190   ' this is the minimum temperature of the temperature sensor range (Kelvin)
+MAX_TEMP_RNG       CON 300   ' this is the maximum temperature of the temperature sensor range (Kelvin)
+
+INV_TEMP_SLP       CON 232
+TEMP_OFF           CON -5
+TEMP_MLTPLR        CON 98
+
+PRSR_SLP           CON 4
+PRSR_OFF           CON 0
+PRSR_MLTPLR        CON 1
+
+INV_HMDT_SLP       CON 256
+HMDT_OFF           CON 0
+HMDT_MLTPLR        CON 100
+
+'DEBUG "Reading EEPROM", CR
+
+addr = 0
+I2CIN SDA, $A1, addr, [ value ]
+PAUSE 100
+'DEBUG "First bit: ", DEC value, CR
+
+DEBUG "Addr,FirstBit,Year,Month,Day,Hour,Minute,Second,DayOfWeek,Pressure,Temperature,Humidity,InternalTemperature", CR
+
+FOR addr2 = $1 TO $1fff STEP DATA_SIZE ' actually, the total storage goes upto $1fff, but accounting for 16 "wbData" size
+  I2CIN SDA, $A1, addr2.HIGHBYTE \addr2.LOWBYTE, [ STR WbData \DATA_SIZE ]
+  PAUSE 5*DATA_SIZE
+  'DEBUG "Addr: ", HEX4 addr2, " VALUE: "
+
+  GOSUB PRINT_DATA
+
+  DEBUG CR
+  'DEBUG "Result = ", HEX4 result, CR
+  'DEBUG "HIGH = ", HEX4 addr.HIGHBYTE, " and LOW = ", HEX4 addr.LOWBYTE, CR
+
+  'DEBUG "Addr: ", HEX4 addr, " VALUE: ", HEX2 value, CR
+NEXT
+
+DEBUG "ALL COMPLETE", CR
+STOP
+
+
+PRINT_DATA:
+  'DEBUG "Location: ", HEX4 addr2, " "
+  DEBUG HEX4 addr2, ","
+  DEBUG HEX2 WbData(0), ","
+
+''''''''''''''''''''''''''''''''''''''''''
+''' PRINT TIME
+'''''''''''''''''''''''''''''''''''''''''''
+  'DEBUG "time: "
+
+  DEBUG HEX2 WbData(6+1), ","
+
+  addr = WbData(4+1)
+  DEBUG HEX2 WbData(4+1), ","
+
+  addr = WbData(3+1)
+  DEBUG HEX2 WbData(3+1), ","
+
+  addr = WbData(2+1)
+  DEBUG HEX2 WbData(2+1), ","
+
+  addr = WbData(1+1)
+  DEBUG HEX2 WbData(1+1), ","
+
+  addr = WbData(0+1)
+  DEBUG HEX2 WbData(0+1), ","
+
+  addr = WbData(5+1)
+  DEBUG HEX1 WbData(5+1), ", "
+
+'''''''''''''''''''''''''''''''''''''''''''''
+''' PRINT SENSOR DATA
+'''''''''''''''''''''''''''''''''''''''''''''
+
+
+
+
+
+  addr = WbData(8) * PRSR_MLTPLR * PRSR_SLP + PRSR_OFF
+  DEBUG DEC WbData(8), ","
+
+
+  addr = max_TEMP_RNG - ((WbData(9)*TEMP_MLTPLR)/INV_TEMP_SLP) + TEMP_OFF
+  DEBUG DEC WbData(9), ","
+
+
+  addr = WbData(10) * HMDT_MLTPLR / INV_HMDT_SLP + HMDT_OFF
+  DEBUG DEC WbData(10), ","
+
+  addr = 123*WbData(11)
+  addr = addr/100
+  'DEBUG "inttemp: ", DEC addr, " K(", DEC WbData(11), ")"
+  DEBUG DEC WbData(11)
+  'DEBUG CR
+
+  RETURN

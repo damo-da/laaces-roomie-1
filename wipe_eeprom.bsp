@@ -1,0 +1,23 @@
+' {$STAMP BS2p}
+' {$PBASIC 2.5}
+' EEPROM Wiper
+
+addr VAR Word
+
+SDA PIN 8
+SCL PIN 9
+
+DEBUG "Wiping EEPROM"
+
+FOR addr = 0 TO $1fff
+
+  I2COUT SDA, $A0, addr.HIGHBYTE \addr.LOWBYTE, [0]
+  PAUSE 5
+
+  IF addr // 32 = 0 THEN
+
+    DEBUG HEX addr, CR
+  ENDIF
+
+NEXT
+DEBUG "DONE"

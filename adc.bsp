@@ -1,0 +1,81 @@
+' -----[ Title ]-----------------------------------------------------------
+' Basic Analog and Digital - PL3_1R0.bs2
+' Program Listing 3.1 Revision 0.
+' {$STAMP BS2p}
+' {$PBASIC 2.5}
+
+MIN_TEMP_RNG       CON 190   ' this is the minimum temperature of the temperature sensor range (Kelvin)
+MAX_TEMP_RNG       CON 300   ' this is the maximum temperature of the temperature sensor range (Kelvin)
+
+INV_TEMP_SLP       CON 232
+TEMP_OFF           CON -5
+TEMP_MLTPLR        CON 100
+
+PRSR_SLP           CON 4
+PRSR_OFF           CON 0
+PRSR_MLTPLR        CON 1
+
+INV_HMDT_SLP       CON 256
+HMDT_OFF           CON 0
+HMDT_MLTPLR        CON 100
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' ADC channel select, multiplex bit address constants
+'
+' Bit 3 is the start bit; bring the data i/o line high to signify an incoming MUX address
+' Bit 2 identifies the conversion as a single or differential
+' Bit 1 identifies If the channel is even Or odd
+' Bit 0 identifies the channel.  Channel 0 is the first even so it is 0, channel 2 is the second even so it is 1...
+'
+'          Bit  3 2 1 0
+'               -------
+' For example: %1 1 0 0 - is a single ended, even numbered, first channel... therefore channel 0
+'
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+ADC_MUX_CH0   CON %1100
+ADC_MUX_CH1   CON %1110
+ADC_MUX_CH2   CON %1101
+ADC_MUX_CH3   CON %1111
+
+ADC_CS        PIN 15         ' the adc chip SELECT is ON PIN 15
+ADC_CL        PIN 14         ' the adc Clock is on pin 14
+ADC_IO        PIN 13         ' the adc data input / output is on pin 13
+
+
+
+P_MAIN          CON 0
+P_COLLECT_DATA  CON 1
+P_READ_CLOCK    CON 2
+P_EEPROM_WRITER CON 3
+
+DATA_SIZE   CON 15
+
+WbData VAR  Byte(DATA_SIZE)
+AddrIndex VAR Word
+initialized VAR Bit
+
+addr VAR Word
+value VAR Byte
+value2 VAR Byte
+
+DO
+  value = ADC_MUX_CH1
+
+  GOSUB GET_DATA
+  addr = MAX_TEMP_RNG - ((value *TEMP_MLTPLR)/INV_TEMP_SLP) + TEMP_OFF
+
+  DEBUG "Temperature: ", DEC value, "   ", DEC addr, CR
+  PAUSE 300
+LOOP
+
+GET_DATA:
+  HIGH ADC_CS                                              ' put the chip select pin in known high state
+  LOW ADC_CS                                               ' bring the chip select pin low to initiate a conversion, the converter is now waiting on the start bit and MUX ID
+  LOW ADC_CL                                               ' start the clock low
+
+  SHIFTOUT ADC_IO, ADC_CL, MSBFIRST, [value\4]            ' send the proper MUX ID, this converts AND stores the digitized value in the READ register
+  SHIFTIN ADC_IO, ADC_CL, MSBPOST, [value\8]              ' read the converted value
+
+  HIGH ADC_CS
+  RETURN

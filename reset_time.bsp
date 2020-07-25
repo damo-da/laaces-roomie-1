@@ -1,0 +1,130 @@
+' {$STAMP BS2p}
+' {$PBASIC 2.5}
+' Reset time
+' {$PORT COM4}
+
+addr VAR Word
+value VAR Byte
+
+'' Begin program
+
+
+'              sec,    min,     hour,   date,   month,    weekday     year
+DATE_TIME DATA $55,    $43,     $12,    $11,    $03,      $02,        $19
+
+C_SEC   CON 0
+C_MIN   CON 1
+C_HOUR  CON 2
+C_DATE  CON 3
+C_MONTH CON 4
+C_DAY   CON 5
+C_YEAR  CON 6
+CONTROL CON 7
+TRICKLE CON 8
+BURST   CON 31
+
+rtc   PIN 10
+sdat  PIN 11
+sclk  PIN 12
+
+DEBUG "Reset clock program"
+
+DEBUG "Reading clock", CR
+GOSUB DISPLAY_DATE_TIME
+
+'STOP
+
+GOSUB RESET_TIME
+PAUSE 300
+
+GOSUB DISPLAY_DATE_TIME
+
+DEBUG "All done.", CR
+
+'GOSUB PRINT_DATA
+
+STOP
+
+
+DISPLAY_DATE_TIME:
+  DEBUG "The datetime is "
+
+  addr = C_YEAR
+  GOSUB _GET_TIME
+  DEBUG HEX2 value, "/"
+
+  addr = C_MONTH
+  GOSUB _GET_TIME
+  DEBUG HEX2 value, "/"
+
+  addr = C_DATE
+  GOSUB _GET_TIME
+  DEBUG HEX2 value, " "
+
+  addr = C_HOUR
+  GOSUB _GET_TIME
+  DEBUG HEX2 value, ":"
+
+  addr = C_MIN
+  GOSUB _GET_TIME
+  DEBUG HEX2 value, ":"
+
+  addr = C_SEC
+  GOSUB _GET_TIME
+  DEBUG HEX2 value
+
+  addr = C_DAY
+  GOSUB _GET_TIME
+  DEBUG "(", HEX1 value, ")", CR
+
+  RETURN
+
+_GET_TIME:
+  LOW rtc
+  LOW sclk
+  HIGH rtc
+  SHIFTOUT sdat, sclk, LSBFIRST, [$81|(addr<<1)\8]
+  SHIFTIN sdat, sclk, LSBPRE, [value\8]
+  LOW rtc
+  RETURN
+
+RESET_TIME:
+  DEBUG "Resetting time...", CR
+  LOW rtc
+  LOW sclk
+  HIGH  rtc
+
+  SHIFTOUT sdat, sclk, LSBFIRST, [$80|(CONTROL<<1)\8]
+  SHIFTOUT sdat, sclk, LSBFIRST, [$00\8]
+
+  LOW rtc
+
+  'DEBUG "Looping now", CR
+  FOR addr=0 TO 6
+        READ DATE_TIME+addr, value
+        'DEBUG DEC addr, ": ", HEX2 value, CR
+        GOSUB _PUT_TIME
+  NEXT
+
+  LOW rtc
+  LOW sclk
+  HIGH rtc
+  SHIFTOUT sdat, sclk, LSBFIRST, [$80|(CONTROL<<1)\8]
+  SHIFTOUT sdat, sclk, LSBFIRST, [$80\8]
+  LOW rtc
+
+  DEBUG "Complete.", CR
+  RETURN
+
+_PUT_TIME:
+  'DEBUG "Writing time", CR
+  LOW rtc
+  LOW sclk
+  HIGH rtc
+
+  SHIFTOUT sdat, sclk, LSBFIRST, [$80|(addr<<1)\8]
+  SHIFTOUT sdat, sclk, LSBFIRST, [value\8]
+
+  LOW rtc
+
+  RETURN

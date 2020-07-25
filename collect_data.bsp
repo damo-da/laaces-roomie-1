@@ -1,0 +1,189 @@
+' {$STAMP BS2p}
+' {$PBASIC 2.5}
+' collect all sensor data
+
+
+P_MAIN          CON 0
+P_COLLECT_DATA  CON 1
+P_READ_CLOCK    CON 2
+P_EEPROM_WRITER CON 3
+
+DATA_SIZE   CON 16
+
+WbData VAR  Byte(DATA_SIZE)
+AddrIndex VAR Word
+initialized VAR Bit
+
+addr VAR Word
+value VAR Byte
+
+'' Begin program
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'
+' BASIC Stamp Pin Assignments
+'
+' Use all CAPS to define PIN constants as well as CON constants
+' to set them apart from variables.
+'
+' Constants do not take any space on the BASIC Stamp EEPROM so
+' use them liberally.  They make code easier to read.
+'
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+ADC_CS        PIN 15         ' the adc chip SELECT is ON PIN 15
+ADC_CL        PIN 14         ' the adc Clock is on pin 14
+ADC_IO        PIN 13         ' the adc data input / output is on pin 13
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' ADC channel select, multiplex bit address constants
+'
+' Bit 3 is the start bit; bring the data i/o line high to signify an incoming MUX address
+' Bit 2 identifies the conversion as a single or differential
+' Bit 1 identifies If the channel is even Or odd
+' Bit 0 identifies the channel.  Channel 0 is the first even so it is 0, channel 2 is the second even so it is 1...
+'
+'          Bit  3 2 1 0
+'               -------
+' For example: %1 1 0 0 - is a single ended, even numbered, first channel... therefore channel 0
+'
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+ADC_MUX_CH0   CON %1100
+ADC_MUX_CH1   CON %1110
+ADC_MUX_CH2   CON %1101
+ADC_MUX_CH3   CON %1111
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+MIN_TEMP_RNG       CON 190   ' this is the minimum temperature of the temperature sensor range (Kelvin)
+MAX_TEMP_RNG       CON 300   ' this is the maximum temperature of the temperature sensor range (Kelvin)
+
+INV_TEMP_SLP       CON 232
+TEMP_OFF           CON -5
+TEMP_MLTPLR        CON 98
+
+PRSR_SLP           CON 4
+PRSR_OFF           CON 0
+PRSR_MLTPLR        CON 1
+
+INV_HMDT_SLP       CON 256
+HMDT_OFF           CON 0
+HMDT_MLTPLR        CON 100
+
+
+'' mark the first bit
+WbData(0) = 1
+
+FOR value=1 TO DATA_SIZE-1
+  WbData(value) = 0
+NEXT
+
+'DEBUG "Collecting data..."
+
+GOSUB collectData
+
+'GOSUB PRINT_DATA
+
+
+RUN P_READ_CLOCK
+
+collectData:
+
+    ' collect the pressure data
+    value = ADC_MUX_CH0                                   ' set the temporary variable to the proper adc channel
+    GOSUB readADC                                          ' digitize and read the adc channel into the temporary variable
+    WbData(8) = value                                          ' copy the temporary variable into a more permanent location in case we wish to display it
+
+
+    ' collect the temperature data
+    value = ADC_MUX_CH1                                   ' do the same for ADC channel 1
+    GOSUB readADC
+    WbData(9) = value                                          ' this time save the contents of temporary variable to 'prsr'
+
+    ' collect the humidity data
+    value = ADC_MUX_CH2                                   ' do the same for ADC channel 2
+    GOSUB readADC
+    WbData(10) = value
+
+
+    value = ADC_MUX_CH3                                  ' do the same for ADC channel 3
+    GOSUB readADC
+    wbData(11) = value
+
+    'DEBUG "Data collected", CR
+
+    RETURN
+
+
+
+readADC:
+
+  HIGH ADC_CS                                              ' put the chip select pin in known high state
+  LOW ADC_CS                                               ' bring the chip select pin low to initiate a conversion, the converter is now waiting on the start bit and MUX ID
+  LOW ADC_CL                                               ' start the clock low
+
+  SHIFTOUT ADC_IO, ADC_CL, MSBFIRST, [value\4]            ' send the proper MUX ID, this converts AND stores the digitized value in the READ register
+  SHIFTIN ADC_IO, ADC_CL, MSBPOST, [value\8]              ' read the converted value
+
+  HIGH ADC_CS
+
+RETURN
+
+PRINT_DATA:
+  DEBUG "Location: ", HEX4 AddrIndex, " "
+
+  DEBUG "FB: ", HEX2 WbData(0), ", "
+
+''''''''''''''''''''''''''''''''''''''''''
+''' PRINT TIME
+'''''''''''''''''''''''''''''''''''''''''''
+  DEBUG "time: "
+
+  DEBUG HEX2 WbData(6+1), "/"
+
+  addr = WbData(4+1)
+  DEBUG HEX2 WbData(4+1), "/"
+
+  addr = WbData(3+1)
+  DEBUG HEX2 WbData(3+1), " "
+
+  addr = WbData(2+1)
+  DEBUG HEX2 WbData(2+1), ":"
+
+  addr = WbData(1+1)
+  DEBUG HEX2 WbData(1+1), ":"
+
+  addr = WbData(0+1)
+  DEBUG HEX2 WbData(0+1)
+
+  addr = WbData(5+1)
+  DEBUG "(", HEX1 WbData(5+1), "), "
+
+'''''''''''''''''''''''''''''''''''''''''''''
+''' PRINT SENSOR DATA
+'''''''''''''''''''''''''''''''''''''''''''''
+
+
+
+
+
+  addr = WbData(8) * PRSR_MLTPLR * PRSR_SLP + PRSR_OFF
+  DEBUG "pres: ", DEC addr, " mbar(", DEC WbData(8), "), "
+
+
+  addr = max_TEMP_RNG - ((WbData(9)*TEMP_MLTPLR)/INV_TEMP_SLP) + TEMP_OFF
+  DEBUG "temp: ", DEC addr, " K(", DEC WbData(9), "), "
+
+
+  addr = WbData(10) * HMDT_MLTPLR / INV_HMDT_SLP + HMDT_OFF
+  DEBUG "hum: ", DEC addr, "%(", DEC WbData(10), "), "
+
+  addr = 123*WbData(11)
+  addr = addr/100
+  DEBUG "inttemp: ", DEC addr, " K(", DEC WbData(11), ")"
+
+  DEBUG CR
+
+  RETURN
